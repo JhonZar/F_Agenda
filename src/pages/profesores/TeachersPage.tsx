@@ -34,17 +34,7 @@ import {
   Edit,
   Trash2,
   GraduationCap,
-  Phone,
-  Mail,
 } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 
 import { useProfesores } from "./hook/useProfesores";
 import type { Profesor } from "@/api/profesores";

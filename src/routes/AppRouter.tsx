@@ -6,6 +6,10 @@ import { useAuth } from "@/context/AuthContext";
 import PhoneLogin from "@/pages/auth/PhoneLogin";
 import Paralelos from "@/pages/paralelos/Paralelos";
 import TeachersPage from "@/pages/profesores/TeachersPage";
+import MateriasPage from "@/pages/materias/MateriasPage";
+import ParaleloMateriasPage from "@/pages/paralelo-materia/ParaleloMateriasPage";
+import ParaleloEstudiantePage from "@/pages/paralelo-estudiante/ParaleloEstudiantePage";
+import EstudiantesPage from "@/pages/estudiantes/EstudiantesPage";
 export default function AppRouter() {
   const { user } = useAuth();
   const isAuth = Boolean(user);
@@ -28,6 +32,11 @@ export default function AppRouter() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/academico/paralelos" element={<Paralelos />} />
         <Route path="/usuarios/profesores" element={<TeachersPage />} />
+        <Route path="/academico/materias" element={<MateriasPage />} />
+        <Route path="/academico/paralelo-curso-materia" element={<ParaleloMateriasPage />} />
+        <Route path="/academico/paralelo-estudiantes" element={<ParaleloEstudiantePage />} />
+        <Route path="/usuarios/estudiantes" element={<EstudiantesPage />} />
+
 
         {/* ... */}
       </Route>
