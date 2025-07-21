@@ -10,6 +10,8 @@ import MateriasPage from "@/pages/materias/MateriasPage";
 import ParaleloMateriasPage from "@/pages/paralelo-materia/ParaleloMateriasPage";
 import ParaleloEstudiantePage from "@/pages/paralelo-estudiante/ParaleloEstudiantePage";
 import EstudiantesPage from "@/pages/estudiantes/EstudiantesPage";
+import AttendancePage from "@/pages/asistencias/AsistenciasPage";
+import AgendaPage from "@/pages/agenda/Agendapage";
 export default function AppRouter() {
   const { user } = useAuth();
   const isAuth = Boolean(user);
@@ -36,6 +38,8 @@ export default function AppRouter() {
         <Route path="/academico/paralelo-curso-materia" element={<ParaleloMateriasPage />} />
         <Route path="/academico/paralelo-estudiantes" element={<ParaleloEstudiantePage />} />
         <Route path="/usuarios/estudiantes" element={<EstudiantesPage />} />
+        <Route path="/academico/asistencias" element={<AttendancePage />} />
+        <Route path="/agenda" element={<AgendaPage />} />
 
 
         {/* ... */}

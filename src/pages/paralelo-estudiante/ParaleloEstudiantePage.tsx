@@ -3,41 +3,30 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster, toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CardDescription,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Plus, RefreshCw, Trash2 } from "lucide-react";
-
+import type { Paralelo } from "@/api/paralelos";
+import { getStudentsForParalelo } from "@/api/paraleloEstudiantes";
 import { useParalelos } from "@/hooks/useParalelos";
+import { useEstudiantes } from "@/hooks/useEstudiantes";
 import {
   useAssignStudent,
-  useSyncStudents,
   useRemoveStudent,
 } from "./hook/useParaleloEstudiantes";
-import { useEstudiantes } from "@/hooks/useEstudiantes";
-import { getStudentsForParalelo } from "@/api/paraleloEstudiantes";
-import type { Paralelo } from "@/api/paralelos";
-import type { User } from "@/api/login";
+
+import { TooltipProvider } from "@/components/ui/tooltip";
+
+import { Header } from "./components/Header";
+import { StatsCards } from "./components/StatsCards";
+import { ParallelsOverview } from "./components/ParallelsOverview";
+import { StudentList } from "./components/StudentList";
+import { AssignDialog } from "./components/AssignDialog";
+import { useAssignedMap } from "./hook/useAssignedMap";
+import { useFilteredStudents } from "./hook/useFilteredStudents";
+
+const DEFAULT_CAPACITY = 50;
 
 export default function ParaleloEstudiantePage() {
-  // 1) Traer paralelos
+  // 1) Paralelos
   const {
     paralelos,
     loading: loadingP,
@@ -48,13 +37,11 @@ export default function ParaleloEstudiantePage() {
     fetchParalelos();
   }, [fetchParalelos]);
 
-  // 2) Traer todos los estudiantes
-  const {
-    data: estudiantes = [],
-  } = useEstudiantes();
+  // 2) Estudiantes
+  const { data: estudiantes = [] } = useEstudiantes();
 
-  // 3) Para cada paralelo, fetch de sus estudiantes asignados
-  const asignadasQueries = useQueries({
+  // 3) Queries de asignados por paralelo
+  const asignQueries = useQueries({
     queries: paralelos.map((p) => ({
       queryKey: ["paraleloEstudiantes", p.id] as const,
       queryFn: () => getStudentsForParalelo(p.id),
@@ -64,278 +51,145 @@ export default function ParaleloEstudiantePage() {
     })),
   });
 
-  // 4) UI: filtros / paralelo activo
+  // 4) Mapa de asignaciones
+  const assignedMap = useAssignedMap(paralelos, asignQueries);
+
+  // 5) Filtrado
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterMode, setFilterMode] = useState<"all" | "assigned" | "unassigned">("all");
-  const [activeParalelo, setActiveParalelo] = useState<Paralelo | null>(null);
-  const [assignOpen, setAssignOpen] = useState(false);
-  const [syncOpen, setSyncOpen] = useState(false);
+  const { filteredUnassigned, filteredAssigned } = useFilteredStudents(
+    estudiantes,
+    assignedMap,
+    searchTerm
+  );
 
-  // 5) Mutaciones para el paralelo activo
-  const paraleloId = activeParalelo?.id ?? 0;
-  const assignMut = useAssignStudent(paraleloId);
-  const syncMut   = useSyncStudents(paraleloId);
-  const removeMut = useRemoveStudent(paraleloId);
+  // 6) Selección y mutaciones
+  const [selectedStudents, setSelectedStudents] = useState<number[]>([]);
+  const [selectedParallel, setSelectedParallel] = useState<string>("");
+  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+  const [isLoadingAssign, setIsLoadingAssign] = useState(false);
 
-  // 6) Formularios modales
-  const [selStudentId, setSelStudentId] = useState<number | "">("");
-  const [syncList, setSyncList] = useState<number[]>([]);
+  const assignMut = useAssignStudent(Number(selectedParallel));
+  const removeMut = useRemoveStudent(0);
 
-  // 7) Armar lista de asignados del paralelo activo
-  const activeIndex = activeParalelo
-    ? paralelos.findIndex((p) => p.id === activeParalelo.id)
-    : -1;
-  const activeAsignados: User[] =
-    activeIndex >= 0 ? asignadasQueries[activeIndex].data || [] : [];
+  // 7) Estadísticas
+  const totalStudents = estudiantes.length;
+  const totalUnassigned = filteredUnassigned.length;
+  const totalAssigned = filteredAssigned.length;
+  const totalParallels = paralelos.length;
 
-  // Precarga syncList al abrir el modal de sincronizar
-  useEffect(() => {
-    if (syncOpen) {
-      setSyncList(activeAsignados.map((u) => u.id));
-    }
-  }, [syncOpen, activeAsignados]);
+  // 8) Conteos por paralelo y disponibilidad
+  const assignedCountById = useMemo(
+    () =>
+      Object.fromEntries(
+        paralelos.map((p, i) => [p.id, asignQueries[i].data?.length ?? 0])
+      ),
+    [paralelos, asignQueries]
+  );
 
-  // 8) Filtrar paralelos según búsqueda y modo
-  const filteredParalelos = useMemo(() => {
-    return paralelos.filter((p, i) => {
-      const assigned: User[] = asignadasQueries[i].data || [];
-      const text = `${p.grade}-${p.section} ${p.teacher.name}`.toLowerCase();
-      if (!text.includes(searchTerm.toLowerCase())) return false;
-      if (filterMode === "assigned")   return assigned.length > 0;
-      if (filterMode === "unassigned") return assigned.length === 0;
-      return true;
-    });
-  }, [paralelos, asignadasQueries, searchTerm, filterMode]);
+  function getParallelAvailability(p: Paralelo) {
+    const current = assignedCountById[p.id] ?? 0;
+    const percentage = (current / DEFAULT_CAPACITY) * 100;
+    if (percentage >= 100) return { color: "bg-red-500", text: "Completo" };
+    if (percentage >= 80) return { color: "bg-yellow-500", text: "Casi lleno" };
+    return { color: "bg-green-500", text: "Disponible" };
+  }
 
-  // --- Handlers ---
+  // 9) Handlers
+  const handleToggle = (id: number) => {
+    setSelectedStudents((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+  const handleSelectAll = () => {
+    const ids = filteredUnassigned.map((u) => u.id);
+    setSelectedStudents((prev) =>
+      prev.length === ids.length ? [] : ids
+    );
+  };
   const handleAssign = async () => {
-    if (!selStudentId || !activeParalelo) {
-      toast.error("Selecciona un estudiante");
-      return;
-    }
+    if (!selectedParallel || selectedStudents.length === 0) return;
+    setIsLoadingAssign(true);
     try {
-      await assignMut.mutateAsync({ student_id: selStudentId });
-      toast.success("Estudiante asignado");
-      setAssignOpen(false);
-      setSelStudentId("");
+      await Promise.all(
+        selectedStudents.map((stuId) =>
+          assignMut.mutateAsync({ student_id: stuId })
+        )
+      );
+      toast.success("Estudiantes asignados");
+      setSelectedStudents([]);
+      setIsAssignDialogOpen(false);
     } catch (err: any) {
-      toast.error(err.message || "Error al asignar estudiante");
+      toast.error(err.message || "Error en la asignación");
+    } finally {
+      setIsLoadingAssign(false);
     }
   };
-
   const handleRemove = async (studentId: number) => {
-    if (!activeParalelo) return;
     try {
       await removeMut.mutateAsync(studentId);
-      toast.success("Estudiante desasignado");
-    } catch (err: any) {
-      toast.error(err.message || "Error al desasignar estudiante");
+      toast.success("Desasignado");
+    } catch (e: any) {
+      toast.error(e.message || "Error");
     }
   };
 
-  const handleSync = async () => {
-    try {
-      await syncMut.mutateAsync({ student_ids: syncList });
-      toast.success("Sincronización completada");
-      setSyncOpen(false);
-    } catch (err: any) {
-      toast.error(err.message || "Error al sincronizar estudiantes");
-    }
-  };
-
-  // --- Loading & error globales ---
   if (loadingP) return <p>Cargando paralelos…</p>;
-  if (errorP)   return <p className="text-red-500">{errorP}</p>;
+  if (errorP) return <p className="text-red-500">{errorP}</p>;
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
-      <Toaster position="top-right" richColors />
+    <TooltipProvider>
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+        <Toaster position="top-right" richColors />
 
-      {/* Buscador + filtros */}
-      <div className="flex items-center justify-between">
-        <SidebarTrigger />
-        <div className="flex items-center gap-4">
-          <Input
-            placeholder="Buscar paralelo..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-64"
+        <Header onRefresh={fetchParalelos} />
+
+        <StatsCards
+          totalStudents={totalStudents}
+          totalUnassigned={totalUnassigned}
+          totalAssigned={totalAssigned}
+          totalParallels={totalParallels}
+        />
+
+        <ParallelsOverview
+          paralelos={paralelos}
+          assignedCountById={assignedCountById}
+          getAvailability={getParallelAvailability}
+        />
+
+        <div className="grid gap-6 lg:grid-cols-2 mt-6">
+          <StudentList
+            title="Sin Asignar"
+            students={filteredUnassigned}
+            countLabel={filteredUnassigned.length.toString()}
+            searchTerm={searchTerm}
+            onSearchChange={(e) => setSearchTerm(e.target.value)}
+            selectedIds={selectedStudents}
+            onToggle={handleToggle}
+            onSelectAll={handleSelectAll}
+            showAssignBar={selectedStudents.length > 0}
+            onAssignClick={() => setIsAssignDialogOpen(true)}
           />
-          <Button
-            variant={filterMode === "all" ? "default" : "outline"}
-            onClick={() => setFilterMode("all")}
-          >
-            Todos
-          </Button>
-          <Button
-            variant={filterMode === "assigned" ? "default" : "outline"}
-            onClick={() => setFilterMode("assigned")}
-          >
-            Con estudiantes
-          </Button>
-          <Button
-            variant={filterMode === "unassigned" ? "default" : "outline"}
-            onClick={() => setFilterMode("unassigned")}
-          >
-            Sin estudiantes
-          </Button>
+
+          <StudentList
+            title="Asignados"
+            students={filteredAssigned}
+            countLabel={filteredAssigned.length.toString()}
+            onRemove={handleRemove}
+          />
         </div>
+
+        <AssignDialog
+          open={isAssignDialogOpen}
+          onClose={() => setIsAssignDialogOpen(false)}
+          paralelos={paralelos}
+          assignedCountById={assignedCountById}
+          selectedCount={selectedStudents.length}
+          selectedParallel={selectedParallel}
+          onSelectParallel={setSelectedParallel}
+          onConfirm={handleAssign}
+          loading={isLoadingAssign}
+        />
       </div>
-
-      {/* Tarjetas de Paralelos */}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {filteredParalelos.map((p, idx) => {
-          const assigned: User[] = asignadasQueries[idx].data || [];
-          return (
-            <Card key={p.id} className="space-y-4">
-              <CardHeader>
-                <CardTitle>
-                  {p.grade}-{p.section}
-                </CardTitle>
-                <CardDescription>
-                  Profesor: {p.teacher.name}
-                </CardDescription>
-              </CardHeader>
-
-              <CardContent>
-                {assigned.length > 0 ? (
-                  <ul className="space-y-1">
-                    {assigned.map((u) => (
-                      <li
-                        key={u.id}
-                        className="flex justify-between items-center"
-                      >
-                        <span>{u.name}</span>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => {
-                            setActiveParalelo(p);
-                            handleRemove(u.id);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Sin estudiantes asignados
-                  </p>
-                )}
-              </CardContent>
-
-              <div className="flex justify-end gap-2 p-4 pt-0">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setActiveParalelo(p);
-                    setSyncOpen(true);
-                  }}
-                >
-                  <RefreshCw className="mr-1 h-4 w-4" />
-                  Sincronizar
-                </Button>
-                <Button
-                  onClick={() => {
-                    setActiveParalelo(p);
-                    setAssignOpen(true);
-                  }}
-                >
-                  <Plus className="mr-1 h-4 w-4" />
-                  Asignar
-                </Button>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Modal: Asignar estudiante */}
-      <Dialog open={assignOpen} onOpenChange={() => setAssignOpen(false)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              Asignar estudiante a{" "}
-              {activeParalelo
-                ? `${activeParalelo.grade}-${activeParalelo.section}`
-                : ""}
-            </DialogTitle>
-            <DialogDescription>
-              Selecciona un estudiante disponible.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4 space-y-4">
-            <Label htmlFor="stu-select">Estudiante</Label>
-            <select
-              id="stu-select"
-              className="w-full rounded-md border px-3 py-2"
-              value={selStudentId}
-              onChange={(e) =>
-                setSelStudentId(
-                  e.target.value ? Number(e.target.value) : ""
-                )
-              }
-            >
-              <option value="">-- selecciona --</option>
-              {estudiantes
-                .filter((u) => !activeAsignados.some((a) => a.id === u.id))
-                .map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                  </option>
-                ))}
-            </select>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAssignOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleAssign}>Asignar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Modal: Sincronizar estudiantes */}
-      <Dialog open={syncOpen} onOpenChange={() => setSyncOpen(false)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              Sincronizar estudiantes de{" "}
-              {activeParalelo
-                ? `${activeParalelo.grade}-${activeParalelo.section}`
-                : ""}
-            </DialogTitle>
-            <DialogDescription>
-              Marca a los estudiantes que quieres mantener asignados.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="max-h-80 overflow-auto py-4 space-y-2">
-            {estudiantes.map((u) => (
-              <label key={u.id} className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  checked={syncList.includes(u.id)}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setSyncList((prev) =>
-                      checked ? [...prev, u.id] : prev.filter((id) => id !== u.id)
-                    );
-                  }}
-                />
-                <span>{u.name}</span>
-              </label>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSyncOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSync}>Sincronizar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+    </TooltipProvider>
   );
 }

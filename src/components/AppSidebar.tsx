@@ -74,7 +74,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         { title: "Materias", url: "/academico/materias", icon: BookOpen },
         { title: "Paralelos", url: "/academico/paralelos", icon: School },
         {
-          title: "Paralelo-Curso-Materia",
+          title: "Paralelo Curso Materia",
           url: "/academico/paralelo-curso-materia",
           icon: ClipboardList,
         },
@@ -82,6 +82,11 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
           title: "Asistencias",
           url: "/academico/asistencias",
           icon: UserCheck,
+        },
+        {
+          title: "Asignacion Estudiantes a Paralelos",
+          url: "/academico/paralelo-estudiantes",
+          icon: ClipboardList,
         },
       ],
     },

@@ -153,36 +153,8 @@ export default function TeachersPage() {
     }));
   };
 
-  // Manejar cambio de status
-  const handleStatusChange = (v: string) => {
-    setForm((f) => ({ ...f, status: v as TeacherLocal["status"] }));
-  };
 
   // Colores y textos para estado
-  const getStatusColor = (s: string) => {
-    switch (s) {
-      case "active":
-        return "bg-green-100 text-green-800";
-      case "vacation":
-        return "bg-blue-100 text-blue-800";
-      case "inactive":
-        return "bg-gray-100 text-gray-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
-  const getStatusText = (s: string) => {
-    switch (s) {
-      case "active":
-        return "Activo";
-      case "vacation":
-        return "Vacaciones";
-      case "inactive":
-        return "Inactivo";
-      default:
-        return "Desconocido";
-    }
-  };
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
