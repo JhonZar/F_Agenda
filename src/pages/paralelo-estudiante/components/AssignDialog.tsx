@@ -95,7 +95,7 @@ export function AssignDialog({
           <Button
             onClick={onConfirm}
             disabled={!selectedParallel || loading}
-            className="bg-navy-600 hover:bg-navy-700"
+            className="bg-navy-600 hover:bg-navy-700 text-black"
           >
             {loading ? (
               <>

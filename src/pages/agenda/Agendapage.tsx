@@ -50,15 +50,6 @@ import {
 } from "@/components/ui/select";
 
 import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-
-import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -286,19 +277,7 @@ export default function AgendaPage() {
   return (
     <TooltipProvider>
       <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
-        {/* Breadcrumb */}
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              <BreadcrumbLink href="/">Dashboard</BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem>
-              <BreadcrumbPage>Agenda Escolar</BreadcrumbPage>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
-
+    
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">

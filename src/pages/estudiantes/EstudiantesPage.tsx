@@ -1,7 +1,7 @@
 // src/views/academico/EstudiantesPage.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster, toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -51,8 +51,18 @@ export default function EstudiantesPage() {
   const updateMut = useUpdateEstudiante();
   const deleteMut = useDeleteEstudiante();
 
-  const [filtered, setFiltered] = useState<Estudiante[]>([]);
   const [search, setSearch] = useState("");
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const list = estudiantes ?? [];
+    if (!term) return list;
+    return list.filter((e) =>
+      [e.name, e.email, e.phone ?? "", e.ci]
+        .join(" ")
+        .toLowerCase()
+        .includes(term)
+    );
+  }, [estudiantes, search]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Estudiante | null>(null);
   const [form, setForm] = useState<CreateEstudiantePayload>({
@@ -61,18 +71,6 @@ export default function EstudiantesPage() {
     phone: "",
     ci: "",
   });
-
-  // Filtrar cuando cambian datos o search
-  useEffect(() => {
-    setFiltered(
-      estudiantes.filter((e) =>
-        [e.name, e.email, e.phone, e.ci]
-          .join(" ")
-          .toLowerCase()
-          .includes(search.toLowerCase())
-      )
-    );
-  }, [estudiantes, search]);
 
   const openCreate = () => {
     setEditing(null);

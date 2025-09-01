@@ -12,6 +12,10 @@ import ParaleloEstudiantePage from "@/pages/paralelo-estudiante/ParaleloEstudian
 import EstudiantesPage from "@/pages/estudiantes/EstudiantesPage";
 import AttendancePage from "@/pages/asistencias/AsistenciasPage";
 import AgendaPage from "@/pages/agenda/Agendapage";
+import ReportsPage from "@/pages/reportes/ReportePage";
+import CategoriasReportePage from "@/pages/reportes/CategoriasReportePage";
+import WhatsAppTemplatesPage from "@/pages/whatsapp/plantillas/PlantillasPage";
+import PadresPage from "@/pages/padres/PadresPage";
 export default function AppRouter() {
   const { user } = useAuth();
   const isAuth = Boolean(user);
@@ -35,11 +39,27 @@ export default function AppRouter() {
         <Route path="/academico/paralelos" element={<Paralelos />} />
         <Route path="/usuarios/profesores" element={<TeachersPage />} />
         <Route path="/academico/materias" element={<MateriasPage />} />
-        <Route path="/academico/paralelo-curso-materia" element={<ParaleloMateriasPage />} />
-        <Route path="/academico/paralelo-estudiantes" element={<ParaleloEstudiantePage />} />
+        <Route
+          path="/academico/paralelo-curso-materia"
+          element={<ParaleloMateriasPage />}
+        />
+        <Route
+          path="/academico/paralelo-estudiantes"
+          element={<ParaleloEstudiantePage />}
+        />
         <Route path="/usuarios/estudiantes" element={<EstudiantesPage />} />
         <Route path="/academico/asistencias" element={<AttendancePage />} />
         <Route path="/agenda" element={<AgendaPage />} />
+
+        <Route
+          path="/reportes/categorias"
+          element={<CategoriasReportePage />}
+        />
+        <Route path="/reportes" element={<ReportsPage />} />
+
+        <Route path="/whatsapp/plantillas" element={<WhatsAppTemplatesPage />} />
+        <Route path="/usuarios/padres" element={<PadresPage />} />
+
 
 
         {/* ... */}
