@@ -200,7 +200,7 @@ const filteredStudents = useMemo(() => {
             <p className="text-slate-600">Gestión de padres y tutores</p>
           </div>
         </div>
-        <Button onClick={openCreate} className="bg-navy-600 hover:bg-navy-700 text-black">
+        <Button onClick={openCreate} className="bg-black hover:bg-navy-700">
           <Plus className="mr-2 h-4 w-4" /> Nuevo Padre/Tutor
         </Button>
       </div>

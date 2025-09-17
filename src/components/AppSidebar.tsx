@@ -48,69 +48,69 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
     if (!user) navigate("/login", { replace: true });
   }, [user, navigate]);
 
-  const navMain = [{ title: "Dashboard", url: "/", icon: Home }];
+  const isAdmin = user?.role === "admin";
+  const isProfesor = user?.role === "profesor";
 
-  const navGroups = [
-    {
-      title: "Gestión de Usuarios",
-      items: [
-        {
-          title: "Administradores",
-          url: "/usuarios/administradores",
-          icon: Settings,
-        },
-        {
-          title: "Profesores",
-          url: "/usuarios/profesores",
-          icon: GraduationCap,
-        },
-        { title: "Estudiantes", url: "/usuarios/estudiantes", icon: Users },
-        { title: "Padres de Familia", url: "/usuarios/padres", icon: User },
-      ],
-    },
-    {
-      title: "Gestión Académica",
-      items: [
-        { title: "Materias", url: "/academico/materias", icon: BookOpen },
-        { title: "Paralelos", url: "/academico/paralelos", icon: School },
-        {
-          title: "Paralelo Curso Materia",
-          url: "/academico/paralelo-curso-materia",
-          icon: ClipboardList,
-        },
-        {
-          title: "Asistencias",
-          url: "/academico/asistencias",
-          icon: UserCheck,
-        },
-        {
-          title: "Asignacion Estudiantes a Paralelos",
-          url: "/academico/paralelo-estudiantes",
-          icon: ClipboardList,
-        },
-      ],
-    },
-    {
-      title: "Reportes y Comunicación",
-      items: [
-        { title: "Reportes", url: "/reportes", icon: FileText },
-        {
-          title: "Categorías de Reportes",
-          url: "/reportes/categorias",
-          icon: FileText,
-        },
-        {
-          title: "Plantillas WhatsApp",
-          url: "/whatsapp/plantillas",
-          icon: MessageSquare,
-        },
-      ],
-    },
-    {
-      title: "Planificación",
-      items: [{ title: "Agenda", url: "/agenda", icon: CalendarDays }],
-    },
+  const navMain = [
+    { title: "Dashboard", url: isProfesor ? "/profesor" : "/", icon: Home },
   ];
+
+  const navGroups = isAdmin
+    ? [
+        {
+          title: "Gestión de Usuarios",
+          items: [
+            { title: "Administradores", url: "/usuarios/administradores", icon: Settings },
+            { title: "Profesores", url: "/usuarios/profesores", icon: GraduationCap },
+            { title: "Estudiantes", url: "/usuarios/estudiantes", icon: Users },
+            { title: "Padres de Familia", url: "/usuarios/padres", icon: User },
+          ],
+        },
+        {
+          title: "Gestión Académica",
+          items: [
+            { title: "Materias", url: "/academico/materias", icon: BookOpen },
+            { title: "Paralelos", url: "/academico/paralelos", icon: School },
+            { title: "Paralelo Curso Materia", url: "/academico/paralelo-curso-materia", icon: ClipboardList },
+            { title: "Asistencias", url: "/academico/asistencias", icon: UserCheck },
+            { title: "Asignacion Estudiantes a Paralelos", url: "/academico/paralelo-estudiantes", icon: ClipboardList },
+          ],
+        },
+        {
+          title: "Reportes y Comunicación",
+          items: [
+            { title: "Reportes", url: "/reportes", icon: FileText },
+            { title: "Categorías de Reportes", url: "/reportes/categorias", icon: FileText },
+            { title: "Plantillas WhatsApp", url: "/whatsapp/plantillas", icon: MessageSquare },
+          ],
+        },
+        {
+          title: "Planificación",
+          items: [{ title: "Agenda", url: "/agenda", icon: CalendarDays }],
+        },
+      ]
+    : isProfesor
+    ? [
+        {
+          title: "Mi Docencia",
+          items: [
+            { title: "Mis Cursos", url: "/profesor/cursos", icon: BookOpen },
+            { title: "Asistencias", url: "/profesor/asistencias", icon: UserCheck },
+            { title: "Reportes", url: "/profesor/reportes", icon: FileText },
+          ],
+        },
+        {
+          title: "Planificación",
+          items: [{ title: "Agenda", url: "/agenda", icon: CalendarDays }],
+        },
+      ]
+    : [
+        // Otros roles (padre/estudiante) podrían tener su menú aquí
+        {
+          title: "General",
+          items: [{ title: "Agenda", url: "/agenda", icon: CalendarDays }],
+        },
+      ];
 
   return (
     <Sidebar variant="inset" {...props} className="border-slate-200">

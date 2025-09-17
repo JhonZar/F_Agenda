@@ -1,7 +1,4 @@
-// src/views/academico/AgendaPage.tsx
-"use client";
-
-import { useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -66,6 +63,8 @@ import {
 
 // Tipos de la API
 import type { CreateAgendaPayload, UpdateAgendaPayload } from "@/api/agendaApi";
+import { useAuth } from "@/context/AuthContext";
+import { getProfesorCursos, type ProfesorCurso } from "@/api/profesor";
 
 // Interfaz para la UI
 interface UIEvent {
@@ -88,32 +87,32 @@ interface UIEvent {
 }
 
 export default function AgendaPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const isProfesor = user?.role === "profesor";
+
+  // Cursos del profesor (para filtrar)
+  const [misCursos, setMisCursos] = useState<ProfesorCurso[]>([]);
+  const [paraleloId, setParaleloId] = useState<string>("");
+
+  useEffect(() => {
+    const load = async () => {
+      if (!isProfesor) return;
+      try {
+        const res = await getProfesorCursos();
+        setMisCursos(res);
+        if (res.length > 0 && !paraleloId) setParaleloId(String(res[0].id));
+      } catch (e) {
+        console.error("Error cargando cursos del profesor", e);
+      }
+    };
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isProfesor]);
+
   // — React Query
-  const { data: events = [] } = useAgendas();
-  const createAgenda = useCreateAgenda();
-  const updateAgenda = useUpdateAgenda();
-  const deleteAgenda = useDeleteAgenda();
-
-  // — UI State
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterType, setFilterType] = useState<"all" | "global" | "parallel">(
-    "all"
-  );
-  const [filterStatus, setFilterStatus] = useState<
-    "all" | "scheduled" | "in_progress" | "completed" | "cancelled"
-  >("all");
-  const [filterDate, setFilterDate] = useState("");
-  const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingEvent, setEditingEvent] = useState<UIEvent | null>(null);
-
-  // — Parallels estático (puedes reemplazarlo por un hook)
-  const parallels = [
-    { id: "1", name: "1ro Básico A" },
-    { id: "2", name: "1ro Básico B" },
-    { id: "3", name: "2do Básico A" },
-    { id: "4", name: "3ro Básico A" },
-  ];
+  const agendasParams = isProfesor && paraleloId ? { paralelo_id: Number(paraleloId) } : undefined;
+  const { data: events = [] } = useAgendas(agendasParams);
 
   // — 1) Convertir AgendaEvent[] a UIEvent[]
   const uiEvents: UIEvent[] = events.map((ev) => {
@@ -138,6 +137,60 @@ export default function AgendaPage() {
       recurringType: ev.recurring_type,
     };
   });
+
+  // Calendario
+  const [monthDate, setMonthDate] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    return d;
+  });
+  const [presetDate, setPresetDate] = useState<string>("")
+
+  const monthLabel = monthDate.toLocaleString(undefined, { month: 'long', year: 'numeric' });
+  const startWeekday = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1).getDay();
+  const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
+  const blanks = Array.from({ length: startWeekday === 0 ? 6 : startWeekday - 1 }, () => null);
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const calendarCells = [...blanks, ...days];
+
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, UIEvent[]>();
+    uiEvents.forEach((ev) => {
+      if (!ev.date) return;
+      const ym = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
+      if (!ev.date.startsWith(ym)) return;
+      const arr = map.get(ev.date) || [];
+      arr.push(ev);
+      map.set(ev.date, arr);
+    });
+    return map;
+  }, [uiEvents, monthDate]);
+  const createAgenda = useCreateAgenda();
+  const updateAgenda = useUpdateAgenda();
+  const deleteAgenda = useDeleteAgenda();
+
+  // — UI State
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState<"all" | "global" | "parallel">(
+    "all"
+  );
+  const [filterStatus, setFilterStatus] = useState<
+    "all" | "scheduled" | "in_progress" | "completed" | "cancelled"
+  >("all");
+  const [filterDate, setFilterDate] = useState("");
+  const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<UIEvent | null>(null);
+
+  // — Parallels estático (para admins)
+  const parallels = [
+    { id: "1", name: "1ro Básico A" },
+    { id: "2", name: "1ro Básico B" },
+    { id: "3", name: "2do Básico A" },
+    { id: "4", name: "3ro Básico A" },
+  ];
+
+  // (moved uiEvents earlier)
 
   // — 2) Filtrado
   const filteredEvents = uiEvents.filter((ev) => {
@@ -179,23 +232,9 @@ export default function AgendaPage() {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
 
-    // Base payload (sin scheduled_at)
-    const base = {
-      title: fd.get("title") as string,
-      description: fd.get("description") as string,
-      paralelo:
-        fd.get("type") === "parallel"
-          ? (fd.get("paralelo") as string)
-          : undefined,
-      location: fd.get("location") as string,
-      organizer: fd.get("organizer") as string,
-      participants: Number(fd.get("participants") || 0),
-      status: fd.get("status") as UIEvent["status"],
-      priority: fd.get("priority") as UIEvent["priority"],
-      reminders: fd.get("reminders") === "on",
-      recurring: fd.get("recurring") === "on",
-      recurring_type: fd.get("recurringType") as UIEvent["recurringType"],
-    };
+    // Base datos comunes UI (el backend sólo usará algunos campos)
+    const baseTitle = fd.get("title") as string;
+    const baseDesc = (fd.get("description") as string) || "";
 
     // Construir scheduled_at ISO
     const date = fd.get("date") as string;
@@ -204,21 +243,50 @@ export default function AgendaPage() {
 
     if (editingEvent) {
       // Update
-      const payload: UpdateAgendaPayload = {
-        ...base,
-        scheduled_at,
-      };
-      updateAgenda.mutate(
-        { id: editingEvent.id, payload },
-        { onSuccess: () => setIsDialogOpen(false) }
-      );
+      if (isProfesor) {
+        const pid = Number(fd.get("profesor_paralelo_id") || paraleloId);
+        const payload: UpdateAgendaPayload = {
+          title: baseTitle,
+          description: baseDesc,
+          scheduled_at,
+          paralelo_id: pid || undefined,
+          grade: undefined,
+        };
+        updateAgenda.mutate(
+          { id: editingEvent.id, payload },
+          { onSuccess: () => setIsDialogOpen(false) }
+        );
+      } else {
+        const payload: UpdateAgendaPayload = {
+          title: baseTitle,
+          description: baseDesc,
+          scheduled_at,
+        };
+        updateAgenda.mutate(
+          { id: editingEvent.id, payload },
+          { onSuccess: () => setIsDialogOpen(false) }
+        );
+      }
     } else {
       // Create
-      const payload: CreateAgendaPayload = {
-        ...base,
-        scheduled_at,
-      };
-      createAgenda.mutate(payload, { onSuccess: () => setIsDialogOpen(false) });
+      if (isProfesor) {
+        const pid = Number(fd.get("profesor_paralelo_id") || paraleloId);
+        const payload: CreateAgendaPayload = {
+          title: baseTitle,
+          description: baseDesc,
+          scheduled_at,
+          paralelo_id: pid,
+        };
+        createAgenda.mutate(payload, { onSuccess: () => setIsDialogOpen(false) });
+      } else {
+        const payload: CreateAgendaPayload = {
+          title: baseTitle,
+          description: baseDesc,
+          scheduled_at,
+          // Para admin, aquí podrías mapear paralelo seleccionado a su ID real
+        };
+        createAgenda.mutate(payload, { onSuccess: () => setIsDialogOpen(false) });
+      }
     }
   };
 
@@ -301,13 +369,15 @@ export default function AgendaPage() {
               <Calendar className="mr-2 h-4 w-4" />
               {viewMode === "list" ? "Vista Lista" : "Vista Calendario"}
             </Button>
-            <Button
-              onClick={handleAddEvent}
-              className="bg-navy-600 hover:bg-navy-700 text-foreground"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Nuevo Evento
-            </Button>
+            {(isAdmin || isProfesor) && (
+              <Button
+                onClick={handleAddEvent}
+                className="bg-black hover:bg-navy-700 "
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Nuevo Evento
+              </Button>
+            )}
           </div>
         </div>
         {/* Stats */}
@@ -369,6 +439,58 @@ export default function AgendaPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Vista Calendario */}
+        {viewMode === "calendar" && (
+          <Card className="border-slate-200">
+            <CardHeader className="flex items-center justify-between">
+              <CardTitle className="capitalize">{monthLabel}</CardTitle>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1))}>
+                  Anterior
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setMonthDate(new Date())}>Hoy</Button>
+                <Button variant="outline" size="sm" onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))}>
+                  Siguiente
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-7 text-xs text-slate-500 mb-2">
+                {["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"].map((d) => (
+                  <div key={d} className="px-2 py-1">{d}</div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-px bg-slate-200 rounded overflow-hidden">
+                {calendarCells.map((cell, idx) => {
+                  if (cell === null) {
+                    return <div key={idx} className="bg-white h-24" />;
+                  }
+                  const day = cell as number;
+                  const dateStr = `${monthDate.getFullYear()}-${String(monthDate.getMonth()+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                  const dayEvents = eventsByDate.get(dateStr) || [];
+                  return (
+                    <div key={idx} className="bg-white h-32 p-2 hover:bg-slate-50 cursor-pointer" onClick={() => { setPresetDate(dateStr); setEditingEvent(null); setIsDialogOpen(true); }}>
+                      <div className="text-right text-xs text-slate-500">{day}</div>
+                      <div className="mt-1 space-y-1">
+                        {dayEvents.slice(0,3).map((ev) => (
+                          <div key={ev.id} className="truncate text-[11px] px-1 py-0.5 rounded border "
+                            title={`${ev.startTime} ${ev.title}`}
+                          >
+                            <span className="opacity-70 mr-1">{ev.startTime}</span>{ev.title}
+                          </div>
+                        ))}
+                        {dayEvents.length > 3 && (
+                          <div className="text-[11px] text-slate-500">+{dayEvents.length - 3} más</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Eventos de Hoy */}
         {todayEvents.length > 0 && (
@@ -475,6 +597,20 @@ export default function AgendaPage() {
                 onChange={(e) => setFilterDate(e.target.value)}
                 className="border-slate-200"
               />
+              {isProfesor && (
+                <Select value={paraleloId} onValueChange={setParaleloId}>
+                  <SelectTrigger className="border-slate-200">
+                    <SelectValue placeholder="Mi curso" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {misCursos.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {String(c.grade)} - {c.section}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <Button
                 variant="outline"
                 onClick={() => {
@@ -482,6 +618,7 @@ export default function AgendaPage() {
                   setFilterType("all");
                   setFilterStatus("all");
                   setFilterDate("");
+                  if (isProfesor && misCursos.length > 0) setParaleloId(String(misCursos[0].id));
                 }}
               >
                 Limpiar
@@ -567,36 +704,40 @@ export default function AgendaPage() {
                       {getStatusText(event.status)}
                     </Badge>
                     <div className="flex items-center space-x-2">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEditEvent(event)}
-                            className="border-slate-200 text-slate-700 hover:bg-slate-50"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Editar evento</p>
-                        </TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeleteEvent(event.id)}
-                            className="border-red-200 text-red-700 hover:bg-red-50 bg-transparent"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Eliminar evento</p>
-                        </TooltipContent>
-                      </Tooltip>
+                      {isAdmin && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEditEvent(event)}
+                              className="border-slate-200 text-slate-700 hover:bg-slate-50"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Editar evento</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                      {isAdmin && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteEvent(event.id)}
+                              className="border-red-200 text-red-700 hover:bg-red-50 bg-transparent"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Eliminar evento</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -639,23 +780,20 @@ export default function AgendaPage() {
                     required
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="type">Tipo de Evento</Label>
-                  <Select
-                    name="type"
-                    defaultValue={editingEvent?.type || "global"}
-                  >
-                    <SelectTrigger className="border-slate-200">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="global">
-                        Global (Toda la institución)
-                      </SelectItem>
-                      <SelectItem value="parallel">Por Paralelo</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {!isProfesor && (
+                  <div className="space-y-2">
+                    <Label htmlFor="type">Tipo de Evento</Label>
+                    <Select name="type" defaultValue={editingEvent?.type || "global"}>
+                      <SelectTrigger className="border-slate-200">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="global">Global (Toda la institución)</SelectItem>
+                        <SelectItem value="parallel">Por Paralelo</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
 
               {/* Descripción */}
@@ -678,7 +816,7 @@ export default function AgendaPage() {
                     id="date"
                     name="date"
                     type="date"
-                    defaultValue={editingEvent?.date || ""}
+                    defaultValue={editingEvent?.date || presetDate || ""}
                     className="border-slate-200"
                     required
                   />
@@ -720,22 +858,34 @@ export default function AgendaPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="paralelo">Paralelo (si aplica)</Label>
-                  <Select
-                    name="paralelo"
-                    defaultValue={editingEvent?.paralelo || ""}
-                  >
-                    <SelectTrigger className="border-slate-200">
-                      <SelectValue placeholder="Seleccionar paralelo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {parallels.map((p) => (
-                        <SelectItem key={p.id} value={p.name}>
-                          {p.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="paralelo">Paralelo</Label>
+                  {isProfesor ? (
+                    <Select name="profesor_paralelo_id" defaultValue={paraleloId || (misCursos[0]?.id ? String(misCursos[0].id) : "") }>
+                      <SelectTrigger className="border-slate-200">
+                        <SelectValue placeholder="Seleccionar mi curso" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {misCursos.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>
+                            {String(c.grade)} - {c.section}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Select name="paralelo" defaultValue={editingEvent?.paralelo || ""}>
+                      <SelectTrigger className="border-slate-200">
+                        <SelectValue placeholder="Seleccionar paralelo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {parallels.map((p) => (
+                          <SelectItem key={p.id} value={p.name}>
+                            {p.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               </div>
 

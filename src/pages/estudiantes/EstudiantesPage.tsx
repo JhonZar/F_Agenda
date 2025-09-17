@@ -1,7 +1,6 @@
-// src/views/academico/EstudiantesPage.tsx
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster, toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -44,6 +43,11 @@ import type {
   UpdateEstudiantePayload,
 } from "@/api/estudiantes";
 
+import { io, Socket } from "socket.io-client";
+
+// Puedes configurar el origen del WS en .env: VITE_RFID_WS_ORIGIN=http://localhost:3001
+const RFID_WS_ORIGIN = (import.meta as any)?.env?.VITE_RFID_WS_ORIGIN || "http://localhost:4000";
+
 export default function EstudiantesPage() {
   const { data: estudiantes = [], isLoading, isError, error } =
     useEstudiantes();
@@ -51,18 +55,7 @@ export default function EstudiantesPage() {
   const updateMut = useUpdateEstudiante();
   const deleteMut = useDeleteEstudiante();
 
-  const [search, setSearch] = useState("");
-  const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    const list = estudiantes ?? [];
-    if (!term) return list;
-    return list.filter((e) =>
-      [e.name, e.email, e.phone ?? "", e.ci]
-        .join(" ")
-        .toLowerCase()
-        .includes(term)
-    );
-  }, [estudiantes, search]);
+  // Estado del modal y formulario (deben existir antes de handlers/efectos que los usan)
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Estudiante | null>(null);
   const [form, setForm] = useState<CreateEstudiantePayload>({
@@ -70,18 +63,111 @@ export default function EstudiantesPage() {
     email: "",
     phone: "",
     ci: "",
+    rfid: "",
   });
 
+  // Estado para captura RFID en tiempo real
+  const [rfidCapture, setRfidCapture] = useState(false);
+  const [socketConnected, setSocketConnected] = useState(false);
+  const socketRef = useRef<Socket | null>(null);
+
+  // Maneja eventos entrantes del WS
+  const handleRfidEvent = (event: any) => {
+    // Normalizamos tipos esperados: unknown_uid y attendance
+    const type = event?.type || event?.event || null;
+
+    if (!type) return;
+
+    if (type === "unknown_uid") {
+      const uid = event?.uid;
+      // Si el modal está abierto y estamos en modo captura, autocompletar el input RFID
+      if (dialogOpen && rfidCapture && uid) {
+        setForm((f) => ({ ...f, rfid: uid }));
+        toast.success(`RFID capturado: ${uid}`);
+        // Desactiva captura automática tras capturar uno
+        setRfidCapture(false);
+      }
+    } else if (type === "attendance") {
+      const action = event?.attendance?.action || "check_in";
+      const name = event?.user?.name || "Estudiante";
+      toast.info(`${name}: ${action === "check_out" ? "Salida" : "Entrada"} registrada`);
+    } else {
+      // Fallback por si el server emite un "rfid_read" simple
+      if (dialogOpen && rfidCapture && event?.uid) {
+        setForm((f) => ({ ...f, rfid: event.uid }));
+        toast.success(`RFID capturado: ${event.uid}`);
+        setRfidCapture(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    // Conecta solo cuando el modal esté abierto y el modo captura activo
+    if (!(dialogOpen && rfidCapture)) {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+      setSocketConnected(false);
+      return;
+    }
+
+    const socket = io(RFID_WS_ORIGIN, {
+      transports: ["websocket"],
+      withCredentials: true,
+    });
+    socketRef.current = socket;
+
+    socket.on("connect", () => setSocketConnected(true));
+    socket.on("disconnect", () => setSocketConnected(false));
+
+    // Escucha los posibles nombres de eventos
+    socket.on("rfid_read", handleRfidEvent);
+    socket.on("unknown_uid", handleRfidEvent);
+    socket.on("attendance", handleRfidEvent);
+    socket.on("status", (s: any) => {
+      // opcional: podrías usarlo para UI
+      console.debug("RFID WS status:", s);
+    });
+
+    socket.on("connect_error", (err) => {
+      console.error("RFID WS error:", err);
+      toast.error("Sin conexión al lector (WS)");
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+      setSocketConnected(false);
+    };
+  }, [dialogOpen, rfidCapture]);
+
+  const [search, setSearch] = useState("");
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const list = estudiantes ?? [];
+    if (!term) return list;
+    return list.filter((e) =>
+      [e.name, e.email, e.phone ?? "", e.ci, e.rfid ?? ""]
+        .join(" ")
+        .toLowerCase()
+        .includes(term)
+    );
+  }, [estudiantes, search]);
+console.log(filtered);
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "", email: "", phone: "", ci: "" });
+    setForm({ name: "", email: "", phone: "", ci: "", rfid: "" });
     setDialogOpen(true);
+    // activa escucha automática en modo creación
+    setRfidCapture(true);
   };
 
   const openEdit = (e: Estudiante) => {
     setEditing(e);
-    setForm({ name: e.name, email: e.email, phone: e.phone, ci: e.ci });
+    setForm({ name: e.name, email: e.email, phone: e.phone, ci: e.ci, rfid: e.rfid });
     setDialogOpen(true);
+    // no forzamos captura en edición; el usuario puede activarla si quiere sobreescribir RFID
   };
 
   const handleDelete = async (id: number) => {
@@ -93,16 +179,39 @@ export default function EstudiantesPage() {
     }
   };
 
+  // Evita enviar strings vacíos en update (para que Laravel no dispare "required")
+  const sanitizeForUpdate = (obj: CreateEstudiantePayload) => {
+    const out: Partial<CreateEstudiantePayload> = {};
+    (Object.keys(obj) as (keyof CreateEstudiantePayload)[]).forEach((k) => {
+      const v = obj[k];
+      if (v === undefined || v === null) return;
+      if (typeof v === "string") {
+        const trimmed = v.trim();
+        if (trimmed === "") return; // no enviar campo vacío
+        // Normaliza RFID a mayúsculas
+        // @ts-ignore
+        out[k] = k === "rfid" ? (trimmed as string).toUpperCase() : trimmed;
+      } else {
+        // @ts-ignore
+        out[k] = v;
+      }
+    });
+    return out;
+  };
+
   const handleSubmit = async () => {
   try {
     if (editing) {
+      // Solo enviar campos no vacíos para no gatillar "sometimes|required"
+      const sanitized = sanitizeForUpdate(form);
       const payload: UpdateEstudiantePayload = {
         id: editing.id,
-        payload: form,
+        payload: sanitized,
       };
       await updateMut.mutateAsync(payload);
       toast.success("Estudiante actualizado");
     } else {
+      // En creación puedes enviar el form completo
       await createMut.mutateAsync(form);
       toast.success("Estudiante creado");
     }
@@ -181,6 +290,7 @@ export default function EstudiantesPage() {
                 <TableHead>Email</TableHead>
                 <TableHead>Teléfono</TableHead>
                 <TableHead>CI</TableHead>
+                <TableHead>RFID</TableHead>
                 <TableHead>Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -191,6 +301,15 @@ export default function EstudiantesPage() {
                   <TableCell>{e.email}</TableCell>
                   <TableCell>{e.phone || "—"}</TableCell>
                   <TableCell>{e.ci}</TableCell>
+                  <TableCell>
+                    {e.rfid ? (
+                      <span title={e.rfid} className="inline-flex items-center text-green-600">
+                        ✓
+                      </span>
+                    ) : (
+                      "-"
+                    )}
+                  </TableCell>
                   <TableCell className="flex gap-2">
                     <Button size="sm" variant="outline" onClick={() => openEdit(e)}>
                       <Edit className="h-4 w-4" />
@@ -256,6 +375,31 @@ export default function EstudiantesPage() {
             <div className="space-y-2">
               <Label htmlFor="ci">CI</Label>
               <Input id="ci" name="ci" value={form.ci} onChange={handleChange} />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="rfid">RFID</Label>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={rfidCapture ? "default" : "outline"}
+                    onClick={() => setRfidCapture((v) => !v)}
+                  >
+                    {rfidCapture ? "Escuchando…" : "Capturar con lector"}
+                  </Button>
+                  <span className={`text-xs ${socketConnected ? "text-green-600" : "text-slate-400"}`}>
+                    {socketConnected ? "WS conectado" : "WS desconectado"}
+                  </span>
+                </div>
+              </div>
+              <Input
+                id="rfid"
+                name="rfid"
+                value={form.rfid || ""}
+                onChange={handleChange}
+                placeholder={rfidCapture ? "Acerque la tarjeta al lector…" : ""}
+              />
             </div>
           </div>
 

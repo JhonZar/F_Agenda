@@ -238,11 +238,11 @@ export default function ReportsPage() {
         <div className="flex items-center space-x-2">
           <SidebarTrigger />
           <div>
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900">Reportes</h2>
-            <p className="text-slate-600">Gestión de reportes estudiantiles</p>
+            <h2 className="text-3xl font-bold tracking-tight">Reportes</h2>
+            <p>Gestión de reportes estudiantiles</p>
           </div>
         </div>
-        <Button onClick={handleAddReport} className="bg-navy-600 hover:bg-navy-700 text-black">
+        <Button onClick={handleAddReport} className="bg-black hover:bg-navy-700">
           <Plus className="mr-2 h-4 w-4" />
           Nuevo Reporte
         </Button>

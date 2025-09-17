@@ -7,7 +7,8 @@ export interface Estudiante {
   name: string;
   email: string;
   phone?: string;
-  ci: string;
+  ci?: string;
+  rfid?: string;
   created_at: string;
   updated_at: string;
 }
@@ -16,7 +17,8 @@ export interface CreateEstudiantePayload {
   name: string;
   email: string;
   phone?: string;
-  ci: string;
+  ci?: string;
+  rfid?: string;
 }
 
 export interface UpdateEstudiantePayload {

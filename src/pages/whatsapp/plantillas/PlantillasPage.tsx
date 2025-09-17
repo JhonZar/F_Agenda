@@ -1,6 +1,10 @@
 import { useState, useEffect } from "react"
 import {
   getPlantillasWhatsapp,
+  createPlantillaWhatsapp,
+  updatePlantillaWhatsapp,
+  deletePlantillaWhatsapp,
+  type PlantillaWhatsappPayload,
 } from "@/api/plantillasWhatsapp"
 import type { PlantillaWhatsapp } from "@/api/plantillasWhatsapp"
 import { Button } from "@/components/ui/button"
@@ -26,6 +30,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useAuth } from "@/context/AuthContext"
 
 // WhatsAppTemplate replaced by PlantillaWhatsapp from API
 
@@ -37,6 +42,7 @@ interface MessagePreview {
 
 export default function WhatsAppTemplatesPage() {
   const [templates, setTemplates] = useState<PlantillaWhatsapp[]>([])
+  const { user } = useAuth()
 
   useEffect(() => {
     async function loadTemplates() {
@@ -62,6 +68,15 @@ export default function WhatsAppTemplatesPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<PlantillaWhatsapp | null>(null)
   const [activeTab, setActiveTab] = useState("templates")
 
+  // Form state
+  const [formName, setFormName] = useState("")
+  const [formCategory, setFormCategory] = useState("general")
+  const [formSubject, setFormSubject] = useState("")
+  const [formMessage, setFormMessage] = useState("")
+  const [formAudience, setFormAudience] = useState("parents")
+  const [formPriority, setFormPriority] = useState("medium")
+  const [formStatus, setFormStatus] = useState("draft")
+
   const categories = [
     { value: "academic", label: "Académico", color: "bg-blue-100 text-blue-800" },
     { value: "administrative", label: "Administrativo", color: "bg-green-100 text-green-800" },
@@ -85,11 +100,25 @@ export default function WhatsAppTemplatesPage() {
   const handleAddTemplate = () => {
     setEditingTemplate(null)
     setIsDialogOpen(true)
+    setFormName("")
+    setFormCategory("general")
+    setFormSubject("")
+    setFormMessage("")
+    setFormAudience("parents")
+    setFormPriority("medium")
+    setFormStatus("draft")
   }
 
   const handleEditTemplate = (template: PlantillaWhatsapp) => {
     setEditingTemplate(template)
     setIsDialogOpen(true)
+    setFormName(template.name)
+    setFormCategory(template.category)
+    setFormSubject(template.subject)
+    setFormMessage(template.message)
+    setFormAudience(template.targetAudience)
+    setFormPriority(template.priority)
+    setFormStatus(template.status)
   }
 
   const handlePreviewTemplate = (template: PlantillaWhatsapp) => {
@@ -169,6 +198,41 @@ export default function WhatsAppTemplatesPage() {
       renderedMessage,
     })
     setIsPreviewOpen(true)
+  }
+
+  const handleDeleteTemplate = async (id: number) => {
+    try {
+      await deletePlantillaWhatsapp(id)
+      setTemplates((prev) => prev.filter((t) => t.id !== id))
+    } catch (err) {
+      console.error("Error eliminando plantilla", err)
+    }
+  }
+
+  const handleSubmitTemplate = async () => {
+    if (!user) return
+    const payload: PlantillaWhatsappPayload = {
+      name: formName.trim(),
+      subject: formSubject.trim(),
+      message: formMessage,
+      category: formCategory as any,
+      status: formStatus as any,
+      targetAudience: formAudience as any,
+      priority: formPriority as any,
+      created_by: user.id,
+    }
+    try {
+      if (editingTemplate) {
+        const updated = await updatePlantillaWhatsapp(editingTemplate.id, payload)
+        setTemplates((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
+      } else {
+        const created = await createPlantillaWhatsapp(payload)
+        setTemplates((prev) => [created, ...prev])
+      }
+      setIsDialogOpen(false)
+    } catch (err) {
+      console.error("Error guardando plantilla", err)
+    }
   }
 
   const handleSendTemplate = (template: PlantillaWhatsapp) => {
@@ -255,7 +319,7 @@ export default function WhatsAppTemplatesPage() {
                 <p>Exportar plantillas</p>
               </TooltipContent>
             </Tooltip>
-            <Button onClick={handleAddTemplate} className="bg-navy-600 hover:bg-navy-700 text-black">
+            <Button onClick={handleAddTemplate} className="bg-black hover:bg-navy-700 ">
               <Plus className="mr-2 h-4 w-4" />
               Nueva Plantilla
             </Button>
@@ -292,9 +356,7 @@ export default function WhatsAppTemplatesPage() {
               <Send className="h-4 w-4 text-blue-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-slate-900">
-                {Math.max(...templates.map((t) => t.usageCount))}
-              </div>
+              <div className="text-2xl font-bold text-slate-900">{templates.length ? Math.max(...templates.map((t) => t.usageCount)) : 0}</div>
               <p className="text-xs text-slate-600">Envíos máximos</p>
             </CardContent>
           </Card>
@@ -525,7 +587,7 @@ export default function WhatsAppTemplatesPage() {
                                       <Download className="mr-2 h-4 w-4" />
                                       Exportar
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem className="text-red-600">
+                                    <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteTemplate(template.id)}>
                                       <Trash2 className="mr-2 h-4 w-4" />
                                       Eliminar
                                     </DropdownMenuItem>
@@ -598,13 +660,13 @@ export default function WhatsAppTemplatesPage() {
                   <Label htmlFor="name" className="text-slate-700">
                     Nombre de la Plantilla
                   </Label>
-                  <Input id="name" defaultValue={editingTemplate?.name || ""} className="border-slate-200" />
+                  <Input id="name" value={formName} onChange={(e) => setFormName(e.target.value)} className="border-slate-200" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="category" className="text-slate-700">
                     Categoría
                   </Label>
-                  <Select defaultValue={editingTemplate?.category || "general"}>
+                  <Select value={formCategory} onValueChange={setFormCategory}>
                     <SelectTrigger className="border-slate-200">
                       <SelectValue placeholder="Seleccionar categoría" />
                     </SelectTrigger>
@@ -622,7 +684,7 @@ export default function WhatsAppTemplatesPage() {
                 <Label htmlFor="subject" className="text-slate-700">
                   Asunto
                 </Label>
-                <Input id="subject" defaultValue={editingTemplate?.subject || ""} className="border-slate-200" />
+                <Input id="subject" value={formSubject} onChange={(e) => setFormSubject(e.target.value)} className="border-slate-200" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="message" className="text-slate-700">
@@ -630,7 +692,8 @@ export default function WhatsAppTemplatesPage() {
                 </Label>
                 <Textarea
                   id="message"
-                  defaultValue={editingTemplate?.message || ""}
+                  value={formMessage}
+                  onChange={(e) => setFormMessage(e.target.value)}
                   className="border-slate-200 min-h-[150px]"
                   placeholder="Escribe tu mensaje aquí. Usa {variable} para campos dinámicos."
                 />
@@ -643,7 +706,7 @@ export default function WhatsAppTemplatesPage() {
                   <Label htmlFor="audience" className="text-slate-700">
                     Audiencia
                   </Label>
-                  <Select defaultValue={editingTemplate?.targetAudience || "parents"}>
+                  <Select value={formAudience} onValueChange={setFormAudience}>
                     <SelectTrigger className="border-slate-200">
                       <SelectValue placeholder="Seleccionar audiencia" />
                     </SelectTrigger>
@@ -659,7 +722,7 @@ export default function WhatsAppTemplatesPage() {
                   <Label htmlFor="priority" className="text-slate-700">
                     Prioridad
                   </Label>
-                  <Select defaultValue={editingTemplate?.priority || "medium"}>
+                  <Select value={formPriority} onValueChange={setFormPriority}>
                     <SelectTrigger className="border-slate-200">
                       <SelectValue placeholder="Seleccionar prioridad" />
                     </SelectTrigger>
@@ -674,7 +737,7 @@ export default function WhatsAppTemplatesPage() {
                   <Label htmlFor="status" className="text-slate-700">
                     Estado
                   </Label>
-                  <Select defaultValue={editingTemplate?.status || "draft"}>
+                  <Select value={formStatus} onValueChange={setFormStatus}>
                     <SelectTrigger className="border-slate-200">
                       <SelectValue placeholder="Seleccionar estado" />
                     </SelectTrigger>
@@ -689,7 +752,7 @@ export default function WhatsAppTemplatesPage() {
               <div className="space-y-2">
                 <Label className="text-slate-700">Variables Detectadas</Label>
                 <div className="flex flex-wrap gap-2">
-                  {editingTemplate?.variables.map((variable) => (
+                  {(editingTemplate?.variables || []).map((variable) => (
                     <Badge key={variable} variant="outline" className="text-xs">
                       {"{" + variable + "}"}
                     </Badge>
@@ -705,7 +768,7 @@ export default function WhatsAppTemplatesPage() {
               <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" className="bg-navy-600 hover:bg-navy-700">
+              <Button onClick={handleSubmitTemplate} className="bg-navy-600 hover:bg-navy-700">
                 {editingTemplate ? "Actualizar" : "Crear"} Plantilla
               </Button>
             </DialogFooter>
