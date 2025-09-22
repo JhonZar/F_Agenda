@@ -28,6 +28,9 @@ export function ProfesorSearch({ onSelect }: ProfesorSearchProps) {
     );
   }, [profesores, query]);
 
+  const limitedResults = useMemo(() => filtered.slice(0, 3), [filtered]);
+  const hasMoreResults = filtered.length > limitedResults.length;
+
   return (
     <div className="w-full max-w-sm">
       <Command>
@@ -47,7 +50,7 @@ export function ProfesorSearch({ onSelect }: ProfesorSearchProps) {
 
         {/* Lista de resultados */}
         <CommandGroup>
-          {filtered.map((prof) => (
+          {limitedResults.map((prof) => (
             <CommandItem
               key={prof.id}
               value={prof.name}
@@ -59,6 +62,11 @@ export function ProfesorSearch({ onSelect }: ProfesorSearchProps) {
               </span>
             </CommandItem>
           ))}
+          {hasMoreResults && (
+            <div className="p-2 text-xs text-muted-foreground">
+              {filtered.length - limitedResults.length} resultados adicionales. Ajusta la búsqueda para ver más.
+            </div>
+          )}
         </CommandGroup>
       </Command>
     </div>
