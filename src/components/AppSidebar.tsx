@@ -50,9 +50,19 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
 
   const isAdmin = user?.role === "admin";
   const isProfesor = user?.role === "profesor";
+  const isPadre = user?.role === "padre";
+  const isRegente = user?.role === "regente";
+
+  const dashboardUrl = isProfesor
+    ? "/profesor"
+    : isPadre
+    ? "/familia/hijos"
+    : isRegente
+    ? "/regente"
+    : "/";
 
   const navMain = [
-    { title: "Dashboard", url: isProfesor ? "/profesor" : "/", icon: Home },
+    { title: "Dashboard", url: dashboardUrl, icon: Home },
   ];
 
   const navGroups = isAdmin
@@ -102,6 +112,30 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         {
           title: "Planificación",
           items: [{ title: "Agenda", url: "/agenda", icon: CalendarDays }],
+        },
+      ]
+    : isRegente
+    ? [
+        {
+          title: "Supervisión",
+          items: [
+            { title: "Panel Regente", url: "/regente", icon: Home },
+            { title: "Reportes", url: "/reportes", icon: FileText },
+          ],
+        },
+        {
+          title: "Comunidad",
+          items: [{ title: "Agenda", url: "/agenda", icon: CalendarDays }],
+        },
+      ]
+    : isPadre
+    ? [
+        {
+          title: "Familia",
+          items: [
+            { title: "Mis Hijos", url: "/familia/hijos", icon: Users },
+            { title: "Agenda", url: "/agenda", icon: CalendarDays },
+          ],
         },
       ]
     : [

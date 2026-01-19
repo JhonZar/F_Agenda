@@ -22,6 +22,8 @@ import ReportsPage from "@/pages/reportes/ReportePage";
 import CategoriasReportePage from "@/pages/reportes/CategoriasReportePage";
 import WhatsAppTemplatesPage from "@/pages/whatsapp/plantillas/PlantillasPage";
 import PadresPage from "@/pages/padres/PadresPage";
+import ParentDashboardPage from "@/pages/padre/ParentDashboardPage";
+import RegenteDashboardPage from "@/pages/regente/RegenteDashboardPage";
 export default function AppRouter() {
   const { user } = useAuth();
   const isAuth = Boolean(user);
@@ -45,7 +47,18 @@ export default function AppRouter() {
           isAuth ? <ProtectedLayout /> : <Navigate to="/login" replace />
         }
       >
-        <Route path="/" element={user?.role === "profesor" ? <DashboardProfesor /> : <Dashboard />} />
+        <Route
+          path="/"
+          element={
+            user?.role === "profesor"
+              ? <DashboardProfesor />
+              : user?.role === "padre"
+              ? <ParentDashboardPage />
+              : user?.role === "regente"
+              ? <RegenteDashboardPage />
+              : <Dashboard />
+          }
+        />
         <Route path="/profesor" element={<RequireRole roles={["profesor","admin"]}><DashboardProfesor /></RequireRole>} />
         <Route path="/profesor/cursos" element={<RequireRole roles={["profesor","admin"]}><MisCursosPage /></RequireRole>} />
         <Route path="/profesor/cursos/:id" element={<RequireRole roles={["profesor","admin"]}><CursoDetallePage /></RequireRole>} />
@@ -61,7 +74,10 @@ export default function AppRouter() {
         <Route path="/agenda" element={<AgendaPage />} />
 
         <Route path="/reportes/categorias" element={<RequireRole roles={["admin"]}><CategoriasReportePage /></RequireRole>} />
-        <Route path="/reportes" element={<RequireRole roles={["admin"]}><ReportsPage /></RequireRole>} />
+        <Route path="/familia/hijos" element={<RequireRole roles={["padre","admin"]}><ParentDashboardPage /></RequireRole>} />
+        <Route path="/regente" element={<RequireRole roles={["regente","admin"]}><RegenteDashboardPage /></RequireRole>} />
+
+        <Route path="/reportes" element={<RequireRole roles={["admin","regente"]}><ReportsPage /></RequireRole>} />
 
         <Route path="/whatsapp/plantillas" element={<RequireRole roles={["admin"]}><WhatsAppTemplatesPage /></RequireRole>} />
         <Route path="/usuarios/padres" element={<RequireRole roles={["admin"]}><PadresPage /></RequireRole>} />

@@ -6,7 +6,7 @@ import { api } from "./client";
 export interface Report {
   id: number;
   student_id: number;
-  teacher_id: number;
+  teacher_id: number | null;
   category_id: number;
   description: string;
   created_at: string;
@@ -18,9 +18,9 @@ export interface Report {
 
 export interface ReportPayload {
   student_id: number;
-  teacher_id: number;
   category_id: number;
   description: string;
+  teacher_id?: number;
 }
 
 // --- Métodos CRUD ---
